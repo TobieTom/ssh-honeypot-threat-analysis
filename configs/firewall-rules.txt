@@ -1,0 +1,247 @@
+#!/bin/bash
+# 
+# SSH Honeypot Firewall Configuration
+# UFW (Uncomplicated Firewall) rules for Ubuntu Server honeypot
+#
+# These are the exact firewall commands I used to secure my honeypot
+# while still allowing the attack traffic I wanted to capture.
+# Each rule represents a lesson learned during deployment.
+#
+
+# =================================================================
+# INITIAL FIREWALL SETUP
+# =================================================================
+
+# Enable UFW firewall service
+# This was the first step - turn on the firewall before configuring rules
+sudo ufw enable
+
+# Set default policies - CRITICAL for security
+# Default DENY incoming: Blocks all inbound connections unless explicitly allowed
+# Default ALLOW outgoing: Permits software updates and package downloads
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+
+# =================================================================
+# CORE SECURITY RULES  
+# =================================================================
+
+# Allow SSH access ONLY from lab network
+# 192.168.243.0/24 is my Host-Only network range (VirtualBox assigned this)
+# This rule took several attempts to get right - had to discover the actual IP range
+sudo ufw allow from 192.168.243.0/24
+
+# Alternative: More specific rule allowing only SSH port from lab network
+# (Use this if you want to be more restrictive)
+# sudo ufw allow from 192.168.243.0/24 to any port 22
+
+# =================================================================
+# VERIFICATION COMMANDS
+# =================================================================
+
+# Check firewall status and rules
+sudo ufw status verbose
+
+# Expected output should show:
+# Status: active
+# Logging: on (low)
+# Default: deny (incoming), allow (outgoing), disabled (routed)
+# New profiles: skip
+#
+# To                         Action      From
+# --                         ------      ----
+# Anywhere                   ALLOW IN    192.168.243.0/24
+
+# =================================================================
+# TESTING AND VALIDATION
+# =================================================================
+
+# Test 1: Verify honeypot is accessible from Kali VM
+# Run this from Kali Linux (192.168.243.3):
+# ssh root@192.168.243.4
+# Should connect and prompt for password
+
+# Test 2: Verify honeypot is NOT accessible from host computer
+# Run this from host PC:
+# ssh root@192.168.243.4
+# Should fail with "No route to host" or timeout
+
+# Test 3: Check what's actually listening on the honeypot
+# Run this on Ubuntu honeypot:
+# sudo netstat -tlnp | grep :22
+# Should show Python3 process listening on 0.0.0.0:22
+
+# =================================================================
+# TROUBLESHOOTING COMMANDS
+# =================================================================
+
+# If connections are still being blocked:
+
+# Check if UFW is actually running
+sudo ufw status
+
+# View detailed UFW logs
+sudo tail -f /var/log/ufw.log
+
+# Check if your network range is correct
+ip addr show
+# Look for the Host-Only adapter IP (should be 192.168.243.x)
+
+# Reset UFW if you need to start over
+# sudo ufw --force reset
+# sudo ufw enable
+
+# =================================================================
+# RULE EXPLANATIONS
+# =================================================================
+
+# Why 192.168.243.0/24?
+# - This is the VirtualBox Host-Only network range assigned to my lab
+# - Only my Kali VM (192.168.243.3) can reach the honeypot (192.168.243.4)
+# - No external internet hosts can access this network range
+# - Provides complete isolation while allowing controlled attacks
+
+# Why default deny incoming?
+# - Blocks all connections except those explicitly allowed
+# - Prevents accidental exposure if I misconfigure something
+# - Standard security practice: deny by default, allow by exception
+# - Protects against services I might not know are running
+
+# Why default allow outgoing?
+# - Honeypot needs to download updates and packages
+# - Cowrie needs to connect to external resources for realistic behavior
+# - Doesn't compromise security since NAT prevents inbound connections
+# - Essential for maintenance and logging functionality
+
+# =================================================================
+# NETWORK ARCHITECTURE CONTEXT
+# =================================================================
+
+# My complete network setup:
+# Host PC (Windows/Mac/Linux)
+#   │
+#   ├── VirtualBox Host-Only Network: 192.168.243.0/24
+#   │   ├── Kali Linux: 192.168.243.3 (attacker)
+#   │   └── Ubuntu Server: 192.168.243.4 (honeypot target)
+#   │
+#   └── VirtualBox NAT Network: 10.0.2.0/24
+#       ├── Kali Linux: 10.0.2.3 (internet access)
+#       └── Ubuntu Server: 10.0.2.15 (internet access)
+
+# Firewall only controls Host-Only network traffic
+# NAT network is automatically secured by VirtualBox (no inbound connections)
+
+# =================================================================
+# SECURITY CONSIDERATIONS
+# =================================================================
+
+# What this firewall configuration protects against:
+# - External attackers reaching the honeypot from internet
+# - Lateral movement from honeypot to host computer
+# - Accidental exposure of honeypot to production networks
+# - DoS attacks from unexpected sources
+
+# What this firewall configuration allows:
+# - Controlled attacks from Kali VM for testing
+# - Outbound connections for updates and maintenance
+# - Normal honeypot operations and logging
+# - SSH access for administration from lab network
+
+# Limitations of this approach:
+# - Relies on VirtualBox network isolation (hypervisor security)
+# - Doesn't protect against VM escape attacks
+# - Assumes Host-Only network configuration is correct
+# - May need adjustment if VirtualBox assigns different IP ranges
+
+# =================================================================
+# PRODUCTION CONSIDERATIONS
+# =================================================================
+
+# For a real production honeypot (NOT this learning lab):
+# - Would need much more restrictive rules
+# - Should implement rate limiting (fail2ban)
+# - Requires intrusion detection system (IDS)
+# - Needs centralized logging and monitoring
+# - Should have automated incident response
+# - Must include compliance and legal considerations
+
+# This configuration is appropriate for:
+# - Educational honeypot projects
+# - Isolated lab environments
+# - Learning cybersecurity concepts
+# - Portfolio development projects
+
+# This configuration is NOT appropriate for:
+# - Production network deployment
+# - Internet-facing honeypots
+# - Business-critical environments
+# - Compliance-regulated systems
+
+# =================================================================
+# MAINTENANCE COMMANDS
+# =================================================================
+
+# Add new allowed IP or network:
+# sudo ufw allow from NEW_IP_ADDRESS
+
+# Remove a rule:
+# sudo ufw delete allow from 192.168.243.0/24
+
+# Disable firewall temporarily:
+# sudo ufw disable
+
+# Re-enable firewall:
+# sudo ufw enable
+
+# Show numbered rules for easier deletion:
+# sudo ufw status numbered
+
+# Delete rule by number:
+# sudo ufw delete NUMBER
+
+# =================================================================
+# BACKUP AND RECOVERY
+# =================================================================
+
+# Backup current UFW rules:
+# sudo cp /etc/ufw/user.rules /etc/ufw/user.rules.backup
+# sudo cp /etc/ufw/user6.rules /etc/ufw/user6.rules.backup
+
+# Export rules to file:
+# sudo ufw status > ufw_rules_backup.txt
+
+# Restore from backup:
+# sudo ufw --force reset
+# sudo ufw enable
+# sudo ufw default deny incoming
+# sudo ufw default allow outgoing
+# sudo ufw allow from 192.168.243.0/24
+
+# =================================================================
+# LESSONS LEARNED
+# =================================================================
+
+# 1. Always set default policies BEFORE adding specific rules
+# 2. Test each rule immediately after adding it
+# 3. Document the network range - don't assume it's always the same
+# 4. Verify rules work from both allowed and blocked networks
+# 5. Keep firewall rules simple and well-documented
+# 6. Backup working configurations before making changes
+# 7. Understanding your network topology is crucial for firewall rules
+
+# =================================================================
+# FINAL NOTES
+# =================================================================
+
+# These firewall rules represent the network security layer of my
+# honeypot project. They ensure that I can safely conduct attack
+# simulations without exposing my real systems to risk.
+
+# The rules balance three requirements:
+# 1. Security: Block unwanted access
+# 2. Functionality: Allow necessary traffic
+# 3. Testability: Enable controlled attack simulation
+
+# Total implementation time: ~30 minutes including troubleshooting
+# Key challenge: Discovering the correct VirtualBox network range
+# Success metric: Kali can attack, but honeypot isolated from internet
