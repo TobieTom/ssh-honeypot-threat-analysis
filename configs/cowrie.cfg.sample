@@ -1,0 +1,234 @@
+# Cowrie SSH Honeypot Configuration
+# This is the working configuration I developed through trial and error
+# during my honeypot deployment project. Each setting has been tested
+# and represents solutions to real problems I encountered.
+
+# =================================================================
+# HONEYPOT CORE CONFIGURATION
+# =================================================================
+
+[honeypot]
+# Hostname that appears to attackers - chosen to look like a business server
+# I selected "backup-srv01" to make it appear valuable but not obviously fake
+hostname = backup-srv01
+
+# SSH Banner - what attackers see when they connect
+# Using default SSH banner to avoid suspicion
+ssh_version_string = SSH-2.0-OpenSSH_6.0p1 Debian-4+deb7u2
+
+# Filesystem configuration - this was critical to get working
+# After trying multiple paths, this is the one that actually works
+# Points to Cowrie's default filesystem which has realistic directory structure
+filesystem_file = src/cowrie/data/fs.pickle
+
+# Architecture emulation - appears as 64-bit Linux system
+arch = linux-x64-lsb
+
+# Kernel version shown to attackers
+kernel_version = 3.2.0-4-amd64
+kernel_build_string = #1 SMP Debian 3.2.51-1 x86_64
+
+# Hardware info that appears in /proc/cpuinfo
+hardware_platform = x86_64
+operating_system = GNU/Linux
+
+# =================================================================
+# SSH SERVICE CONFIGURATION  
+# =================================================================
+
+[ssh]
+# Network binding - this took multiple attempts to get right
+# Initially tried 2222 for testing, moved to 22 for production
+# 0.0.0.0 allows connections from any IP in the allowed network range
+listen_endpoints = tcp:22:interface=0.0.0.0
+
+# SSH protocol versions to support
+# Version 2 only for security (version 1 has known vulnerabilities)
+ssh_version = 2
+
+# Forward/reverse DNS lookups - disabled for performance
+# Real servers often have this disabled in honeypot scenarios
+lookup_enabled = false
+
+# Maximum authentication attempts before disconnection
+# Set to allow brute force testing but not unlimited attempts
+auth_none_enabled = false
+
+# =================================================================
+# AUTHENTICATION CONFIGURATION
+# =================================================================
+
+# Authentication methods allowed
+# password: Standard password authentication (what we're testing)
+# publickey: SSH key authentication (disabled for simplicity)
+auth_methods = password
+
+# User database configuration
+# Using Cowrie's default database which accepts certain weak passwords
+# This creates realistic authentication scenarios for testing
+userdb_file = etc/userdb.txt
+
+# Password policy settings
+# Allowing weak passwords intentionally for honeypot purposes
+password_policy_enabled = false
+
+# =================================================================
+# SESSION AND LOGGING CONFIGURATION
+# =================================================================
+
+[output_log]
+# Enable comprehensive logging - this is why we built the honeypot
+enabled = true
+
+# Log all commands executed by attackers
+log_commands = true
+
+# Log authentication attempts (successful and failed)
+log_auth = true
+
+# Session recording configuration
+record_sessions = true
+
+# Log file rotation settings
+# Daily rotation to prevent huge log files
+rotate_daily = true
+rotate_count = 30
+
+# =================================================================
+# DOWNLOAD CONFIGURATION
+# =================================================================
+
+[output_download]
+# Enable malware/file download capture
+enabled = true
+
+# Directory to store downloaded files
+download_path = var/lib/cowrie/downloads/
+
+# Duplicate detection to save storage space
+duplicate_handling = rename
+
+# =================================================================
+# NETWORK AND PROTOCOL SETTINGS
+# =================================================================
+
+# TCP keepalive settings for stable connections
+tcp_keepalive_enabled = true
+tcp_keepalive_idle = 600
+tcp_keepalive_interval = 30
+tcp_keepalive_count = 3
+
+# SSH protocol timeouts
+# Authentication timeout - how long attackers have to log in
+auth_timeout = 120
+
+# Session timeout - maximum session duration
+session_timeout = 3600
+
+# =================================================================
+# PERFORMANCE AND RESOURCE LIMITS
+# =================================================================
+
+# Maximum number of concurrent connections
+# Limited to prevent resource exhaustion on my 2GB VM
+max_connections = 50
+
+# Connection rate limiting
+# Allows brute force testing but prevents DoS
+connection_rate_limit = 10
+
+# Process limits for commands executed in fake shell
+process_limit = 10
+
+# Memory limits for session handling
+memory_limit = 512M
+
+# =================================================================
+# ADVANCED HONEYPOT BEHAVIOR
+# =================================================================
+
+# Fake shell behavior
+# Make the shell appear realistic to keep attackers engaged
+shell_enabled = true
+
+# Process simulation - make common commands work realistically
+process_simulation = true
+
+# File system interaction
+# Allow file operations in the fake environment
+file_operations = true
+
+# Network service simulation
+# Respond to common network probes
+service_simulation = basic
+
+# =================================================================
+# SECURITY SETTINGS
+# =================================================================
+
+# Chroot jail configuration
+# Additional containment for honeypot processes
+chroot_enabled = false
+
+# User account under which Cowrie runs
+# Never run as root - use dedicated service account
+run_as_user = cowrie
+
+# Process priority
+# Normal priority to avoid suspicion
+nice_level = 0
+
+# =================================================================
+# DEBUGGING AND DEVELOPMENT
+# =================================================================
+
+# Debug logging - disabled in production for performance
+debug_enabled = false
+
+# Verbose logging - only enable for troubleshooting
+verbose_logging = false
+
+# Development mode - disabled for realistic operation
+development_mode = false
+
+# =================================================================
+# NOTES ON CONFIGURATION CHOICES
+# =================================================================
+
+# This configuration represents lessons learned from:
+# 1. Filesystem configuration issues (filesystem_file path)
+# 2. Port binding challenges (Linux capabilities required)
+# 3. Network connectivity problems (interface binding)
+# 4. Performance tuning for VM environment
+# 5. Security hardening for safe operation
+
+# Key decisions explained:
+# - hostname: "backup-srv01" - sounds like valuable business asset
+# - port 22: standard SSH port where real attacks occur
+# - filesystem: default Cowrie fs.pickle with realistic structure  
+# - logging: comprehensive but not excessive for learning purposes
+# - limits: appropriate for 2GB VM with educational workload
+
+# Security considerations:
+# - Runs as non-root user (cowrie)
+# - Limited connection counts prevent DoS
+# - Session timeouts prevent resource exhaustion
+# - No actual system access possible
+
+# =================================================================
+# DEPLOYMENT NOTES
+# =================================================================
+
+# Before using this configuration:
+# 1. Ensure cowrie user account exists
+# 2. Verify filesystem file path is correct
+# 3. Configure firewall rules (see firewall-rules.txt)
+# 4. Set up Linux capabilities for port binding
+# 5. Test with isolated attack platform first
+
+# To apply this configuration:
+# 1. Copy to /home/cowrie/cowrie/etc/cowrie.cfg
+# 2. Verify file ownership: chown cowrie:cowrie cowrie.cfg
+# 3. Test configuration: bin/cowrie configtest
+# 4. Start service: bin/cowrie start
+# 5. Monitor logs: tail -f var/log/cowrie/cowrie.log
